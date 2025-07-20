@@ -1,172 +1,365 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
 name: Test
-
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches:
+      - main
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
+  group: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   code-quality:
     name: code-quality
     runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
       - name: repository checkout step
         uses: actions/checkout@v4
-
       - name: python environment step
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
+          python-version: '3.11'
       - name: install pre-commit
         run: python3 -m pip install pre-commit
-
+      - id: measurement-4
+        name: Record Measurement After install pre-commit
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: install pre-commit
+          task: get-measurement
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - id: changed-files
+        name: Get changed files
+        run: 'CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha
+          }} ${{ github.sha }} | tr ''\n'' '' '')
 
-      - name: Get changed files
-        id: changed-files
-        run: |
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | tr '\n' ' ')
           echo "CHANGED_FILES=${CHANGED_FILES}" >> $GITHUB_ENV
 
+          '
+      - id: measurement-7
+        name: Record Measurement After Get changed files
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Get changed files
+          task: get-measurement
       - name: Print changed files
-        run: |
-          echo "Changed files:" && echo "$CHANGED_FILES" | tr ' ' '\n'
+        run: 'echo "Changed files:" && echo "$CHANGED_FILES" | tr '' '' ''\n''
 
+          '
+      - id: measurement-9
+        name: Record Measurement After Print changed files
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Print changed files
+          task: get-measurement
       - name: Run pre-commit on changed files
-        run: |
-          if [ -n "$CHANGED_FILES" ]; then
-            pre-commit run --color always --files $CHANGED_FILES --show-diff-on-failure
-          else
-            echo "No changed files to check."
-          fi
+        run: "if [ -n \"$CHANGED_FILES\" ]; then\n  pre-commit run --color always\
+          \ --files $CHANGED_FILES --show-diff-on-failure\nelse\n  echo \"No changed\
+          \ files to check.\"\nfi\n"
+      - id: measurement-11
+        name: Record Measurement After Run pre-commit on changed files
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Run pre-commit on changed files
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+  pytest:
+    name: Run pytest
+    needs: pytest-nosoftdeps
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - if: runner.os == 'macOS'
+        name: Setup macOS
+        run: 'brew install libomp  # https://github.com/pytorch/pytorch/issues/20030
 
+          '
+      - id: measurement-4
+        name: Record Measurement After Setup macOS
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Setup macOS
+          task: get-measurement
+      - id: full-python-version
+        name: Get full Python version
+        run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in
+          sys.version_info))") >> $GITHUB_OUTPUT
+        shell: bash
+      - id: measurement-6
+        name: Record Measurement After Get full Python version
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Get full Python version
+          task: get-measurement
+      - name: Install dependencies
+        run: 'pip install ".[dev,all_extras,github-actions]"
+
+          '
+        shell: bash
+      - id: measurement-8
+        name: Record Measurement After Install dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Install dependencies
+          task: get-measurement
+      - name: Show dependencies
+        run: python -m pip list
+      - id: measurement-10
+        name: Record Measurement After Show dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Show dependencies
+          task: get-measurement
+      - name: Run pytest
+        run: python -m pytest
+        shell: bash
+      - id: measurement-12
+        name: Record Measurement After Run pytest
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Run pytest
+          task: get-measurement
+      - name: Statistics
+        run: 'pip install coverage
+
+          coverage report
+
+          coverage xml
+
+          '
+      - id: measurement-14
+        name: Record Measurement After Statistics
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Statistics
+          task: get-measurement
+      - continue-on-error: true
+        if: always()
+        name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: false
+          file: coverage.xml
+          flags: cpu,pytest
+          name: CPU-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python-version:
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
+  pytest-nosoftdeps:
+    name: no-softdeps
+    needs: code-quality
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - if: runner.os == 'macOS'
+        name: Setup macOS
+        run: 'brew install libomp  # https://github.com/pytorch/pytorch/issues/20030
+
+          '
+      - id: measurement-4
+        name: Record Measurement After Setup macOS
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Setup macOS
+          task: get-measurement
+      - id: full-python-version
+        name: Get full Python version
+        run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in
+          sys.version_info))") >> $GITHUB_OUTPUT
+        shell: bash
+      - id: measurement-6
+        name: Record Measurement After Get full Python version
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Get full Python version
+          task: get-measurement
+      - name: Install dependencies
+        run: 'pip install ".[dev,github-actions]"
+
+          '
+        shell: bash
+      - id: measurement-8
+        name: Record Measurement After Install dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Install dependencies
+          task: get-measurement
+      - name: Show dependencies
+        run: python -m pip list
+      - id: measurement-10
+        name: Record Measurement After Show dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Show dependencies
+          task: get-measurement
+      - name: Run pytest
+        run: python -m pytest
+        shell: bash
+      - id: measurement-12
+        name: Record Measurement After Run pytest
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Run pytest
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python-version:
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
   run-notebook-tutorials:
     name: Run notebook tutorials
     needs: code-quality
     runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.9
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
+        run: 'python -m pip install --upgrade pip
+
           python -m pip install ".[dev,all_extras,github-actions]"
 
+          '
+      - id: measurement-4
+        name: Record Measurement After Install dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Install dependencies
+          task: get-measurement
       - name: Show dependencies
-        run:  python -m pip list
-
+        run: python -m pip list
+      - id: measurement-6
+        name: Record Measurement After Show dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Show dependencies
+          task: get-measurement
       - name: Run example notebooks
         run: build_tools/run_examples.sh
         shell: bash
-
-  pytest-nosoftdeps:
-    name: no-softdeps
-    needs: code-quality
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - id: measurement-8
+        name: Record Measurement After Run example notebooks
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup macOS
-        if: runner.os == 'macOS'
-        run: |
-          brew install libomp  # https://github.com/pytorch/pytorch/issues/20030
-
-      - name: Get full Python version
-        id: full-python-version
-        shell: bash
-        run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))") >> $GITHUB_OUTPUT
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          pip install ".[dev,github-actions]"
-
-      - name: Show dependencies
-        run: python -m pip list
-
-      - name: Run pytest
-        shell: bash
-        run: python -m pytest
-
-  pytest:
-    name: Run pytest
-    needs: pytest-nosoftdeps
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+          json-output: true
+          label: Run example notebooks
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup macOS
-        if: runner.os == 'macOS'
-        run: |
-          brew install libomp  # https://github.com/pytorch/pytorch/issues/20030
-
-      - name: Get full Python version
-        id: full-python-version
-        shell: bash
-        run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))") >> $GITHUB_OUTPUT
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          pip install ".[dev,all_extras,github-actions]"
-
-      - name: Show dependencies
-        run: python -m pip list
-
-      - name: Run pytest
-        shell: bash
-        run: python -m pytest
-
-      - name: Statistics
-        run: |
-          pip install coverage
-          coverage report
-          coverage xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        if: always()
-        continue-on-error: true
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: coverage.xml
-          flags: cpu,pytest
-          name: CPU-coverage
-          fail_ci_if_error: false
+          name: total-energy-consumption
+          path: total_energy_consumption.json
